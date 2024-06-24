@@ -1,0 +1,468 @@
+<!-- #################### LINE GRAPH ##########################-->
+
+<!-- Styles -->
+<style>
+#chartdiv {
+  width: 100%;
+  height: 50%;
+  position: sticky;
+  bottom: 30px;
+  z-index: 1;
+  background-color: white;
+}
+</style>
+
+<!-- Resources -->
+<script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/xy.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/themes/Kelly.js"></script>
+<link href="dist/css/tabulator.css" rel="stylesheet">
+<script type="text/javascript" src="dist/js/tabulator.min.js"></script>
+<script src="luxon.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+
+<!-- Chart code -->
+<script type="module">
+  var seriesINR;
+  var seriesDosis;
+  var seriesDosisDS;
+  var seriesDosisSum;
+  var chart;
+am5.ready(function() {
+
+// Create root element
+// https://www.amcharts.com/docs/v5/getting-started/#Root_element
+var root = am5.Root.new("chartdiv");
+
+root._logo.dispose();
+
+// Set themes
+// https://www.amcharts.com/docs/v5/concepts/themes/
+root.setThemes([
+  am5themes_Animated.new(root),
+  am5themes_Kelly.new(root)
+]);
+
+
+// Create chart
+// https://www.amcharts.com/docs/v5/charts/xy-chart/
+chart = root.container.children.push(am5xy.XYChart.new(root, {
+  panX: true,
+  panY: false,
+  wheelX: "panX",
+  wheelY: "zoomX",
+  pinchZoomX:true
+}));
+
+
+// Add cursor
+// https://www.amcharts.com/docs/v5/charts/xy-chart/cursor/
+var cursor = chart.set("cursor", am5xy.XYCursor.new(root, {
+  behavior: "none"
+}));
+cursor.lineY.set("visible", false);
+
+
+// Generate random data
+var date = new Date();
+date.setHours(0, 0, 0, 0);
+var value = 100;
+
+function generateData() {
+  value = Math.round((Math.random() * 10 - 5) + value);
+  am5.time.add(date, "day", 1);
+  return {
+    date: date.getTime(),
+    value: value
+  };
+}
+
+function generateDataFuture() {
+  value = Math.round((Math.random() * 10 - 5) + value);
+  am5.time.add(date, "day", 1);
+  return {
+    date: date.getTime(),
+    value: value,
+    strokeSettings: {
+      stroke: am5.color(0x990000),
+      strokeDasharray: [3, 3]
+    }
+  };
+}
+
+function generateDatas(count) {
+  date = new Date();
+  date.setHours(0, 0, 0, 0);
+  value = 100;
+  var data = [];
+  for (var i = 0; i < count; ++i) {
+    if (i > 40){
+      data.push(generateDataFuture());
+    }
+    data.push(generateData());
+  }
+  return data;
+}
+
+
+// Create axes
+// https://www.amcharts.com/docs/v5/charts/xy-chart/axes/
+var xAxis = chart.xAxes.push(am5xy.DateAxis.new(root, {
+  maxDeviation: 1,
+  baseInterval: {
+    timeUnit: "day",
+    count: 1
+  },
+  renderer: am5xy.AxisRendererX.new(root, {
+  pan:"zoom"
+}),
+  tooltip: am5.Tooltip.new(root, {})
+}));
+
+var yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root, {
+  maxDeviation:1,
+  renderer: am5xy.AxisRendererY.new(root, {
+  pan:"zoom"
+}),
+  fillRule: function(dataItem) {
+    var axisFill = dataItem.get("axisFill");
+    var value = dataItem.get("value");
+    axisFill.setPrivate("visible", value >= 2 && value < 3);
+  }
+}));
+
+
+var xRenderer = xAxis.get("renderer");
+xRenderer.labels.template.setAll({
+  rotation: 0
+});
+
+
+
+
+
+
+var yRenderer = yAxis.get("renderer");
+yRenderer.axisFills.template.setAll({
+  fill: am5.color(0x93C54B),
+  fillOpacity: 0.3,
+  visible: true
+});
+
+async function createSeries(name, data, doOtherStrokeSettings, color) {
+// Add series
+// https://www.amcharts.com/docs/v5/charts/xy-chart/series/
+var _tooltip = am5.Tooltip.new(root, {
+    labelText: "{name}: {valueY}"
+});
+
+var series = chart.series.push(am5xy.SmoothedXLineSeries.new(root, {
+  name: name,
+  xAxis: xAxis,
+  yAxis: yAxis,
+  valueYField: "value",
+  valueXField: "date",
+  tooltip: _tooltip,
+  stroke: am5.color(color),
+  fill: am5.color(color)
+}));
+
+_tooltip.get("background").setAll({
+  fill: color,
+  fillOpacity: 0.65
+})
+
+series.fills.template.setAll({
+  visible: false,
+  fillOpacity: 0.8,
+  fillField: "fillSettings"
+});
+
+series.bullets.push(function() {
+  return am5.Bullet.new(root, {
+    locationY: 0,
+    sprite: am5.Circle.new(root, {
+      radius: 4,
+      stroke: root.interfaceColors.get("background"),
+      strokeWidth: 2,
+      fill: series.get("fill")
+    })
+  });
+});
+
+series.strokes.template.setAll({
+    strokeWidth: 3,
+    templateField: "strokeSettings"
+  });
+
+if (doOtherStrokeSettings){
+  data.forEach(element => {
+    element.strokeSettings = {
+      strokeDasharray: [3, 3]
+    };
+    element.fillSettings = {
+      visible: false
+    };
+  });
+}
+
+console.log(data);
+series.data.setAll(data);
+series.appear(500);
+return series;
+}
+
+fetch('data.json').then((response) => response.json()).then((jsonstring) => createSeries("INR", getINRData(jsonstring), false, 0xFF0000)).then((series) => seriesINR = series);
+fetch('data.json').then((response) => response.json()).then((jsonstring) => createSeries("Dosis", getDosisData(jsonstring), false, 0x0000FF)).then((series) => seriesDosis = series);
+fetch('data.json').then((response) => response.json()).then((jsonstring) => createSeries("Dosis 7-Tage", getDosisDSData(jsonstring), true, 0xB4A7D6)).then((series) => seriesDosisDS = series);
+
+
+// Add scrollbar
+// https://www.amcharts.com/docs/v5/charts/xy-chart/scrollbars/
+chart.set("scrollbarX", am5.Scrollbar.new(root, {
+  orientation: "horizontal"
+}));
+
+
+// Make stuff animate on load
+// https://www.amcharts.com/docs/v5/concepts/animations/
+chart.appear(1000, 250);
+
+}); // end am5.ready()
+
+function getINRData(tabledata){
+  var data = [];
+  for (let index = 0; index < tabledata.length; index++) {
+    if(tabledata[index].inr == 0)
+      continue;
+    data.push({date: Date.parse(luxon.DateTime.fromFormat(tabledata[index].date, "dd.MM.yyyy")), value: parseFloat(tabledata[index].inr)});
+  }
+  return data;
+}
+
+function getDosisData(tabledata){
+  var data = [];
+  for (let index = 0; index < tabledata.length; index++) {
+    if(tabledata[index].dosis == -1)
+      continue;
+    data.push({date: Date.parse(luxon.DateTime.fromFormat(tabledata[index].date, "dd.MM.yyyy")), value: parseFloat(tabledata[index].dosis)});
+  }
+  return data;
+}
+
+function getDosisDSData(tabledata){
+  var data = [];
+  for (let index = 0; index < tabledata.length; index++) {
+    if(tabledata[index].dosis == -1)
+      continue;
+    data.push({date: Date.parse(luxon.DateTime.fromFormat(tabledata[index].date, "dd.MM.yyyy")), value: parseFloat(tabledata[index].dosisds), strokeSettings: {strokeDasharray: [3, 3]}, fillSettings: {visible: false}});
+  }
+  return data;
+}
+
+function getDosisSumData(tabledata){
+  var data = [];
+  for (let index = 0; index < tabledata.length; index++) {
+    if(tabledata[index].dosis == -1)
+      continue;
+    data.push({date: Date.parse(luxon.DateTime.fromFormat(tabledata[index].date, "dd.MM.yyyy")), value: parseFloat(tabledata[index].dosissum)});
+  }
+  return data;
+}
+
+  //Create Date Editor
+  var dateEditor = function(cell, onRendered, success, cancel){
+    //cell - the cell component for the editable cell
+    //onRendered - function to call when the editor has been rendered
+    //success - function to call to pass thesuccessfully updated value to Tabulator
+    //cancel - function to call to abort the edit and return to a normal cell
+
+    //create and style input
+    var cellValue = luxon.DateTime.fromFormat(cell.getValue(), "dd/MM/yyyy").toFormat("yyyy-MM-dd"),
+    input = document.createElement("input");
+
+    input.setAttribute("type", "date");
+
+    input.style.padding = "4px";
+    input.style.width = "100%";
+    input.style.boxSizing = "border-box";
+
+    input.value = cellValue;
+
+    onRendered(function(){
+        input.focus();
+        input.style.height = "100%";
+    });
+
+    function onChange(){
+        if(input.value != cellValue){
+            success(luxon.DateTime.fromFormat(input.value, "yyyy-MM-dd").toFormat("dd/MM/yyyy"));
+        }else{
+            cancel();
+        }
+    }
+
+    //submit new value on blur or change
+    input.addEventListener("blur", onChange);
+
+    //submit new value on enter
+    input.addEventListener("keydown", function(e){
+        if(e.keyCode == 13){
+            onChange();
+        }
+
+        if(e.keyCode == 27){
+            cancel();
+        }
+    });
+
+    return input;
+};
+
+//Create Date Editor
+var dateEditor = function(cell, onRendered, success, cancel){
+    //cell - the cell component for the editable cell
+    //onRendered - function to call when the editor has been rendered
+    //success - function to call to pass thesuccessfully updated value to Tabulator
+    //cancel - function to call to abort the edit and return to a normal cell
+
+    //create and style input
+    var cellValue = luxon.DateTime.fromFormat(cell.getValue(), "dd/MM/yyyy").toFormat("yyyy-MM-dd"),
+    input = document.createElement("input");
+
+    input.setAttribute("type", "date");
+
+    input.style.padding = "4px";
+    input.style.width = "100%";
+    input.style.boxSizing = "border-box";
+
+    input.value = cellValue;
+
+    onRendered(function(){
+        input.focus();
+        input.style.height = "100%";
+    });
+
+    function onChange(){
+        if(input.value != cellValue){
+            success(luxon.DateTime.fromFormat(input.value, "yyyy-MM-dd").toFormat("dd/MM/yyyy"));
+        }else{
+            cancel();
+        }
+    }
+
+    //submit new value on blur or change
+    input.addEventListener("blur", onChange);
+
+    //submit new value on enter
+    input.addEventListener("keydown", function(e){
+        if(e.keyCode == 13){
+            onChange();
+        }
+
+        if(e.keyCode == 27){
+            cancel();
+        }
+    });
+
+    return input;
+};
+
+var tabledata = await fetch('data.json')
+.then((response) => response.json())
+
+calculateAverages(tabledata);
+
+function calculateAverages(tabledata){
+  for (let index = 0; index < tabledata.length; index++) {
+    const rootElement = tabledata[index];
+    var countINR = 0, countDosis = 0, sumINR = 0, sumDosis = 0;
+    for (let yindex = 0; yindex < 7; yindex++) {
+      var INR = tabledata[Math.max(0, index - yindex)].inr;
+      var Dosis = tabledata[Math.max(0, index - yindex)].dosis;
+      if (INR != 0 && INR != null){
+        countINR++;
+        sumINR += INR;
+      }
+      if (Dosis != -1 && Dosis != null){
+        countDosis++;
+        sumDosis += Dosis;
+      }
+    }
+    console.log("Data: "+ tabledata[index].date + " SumINR: " + sumINR + " CountINR: " + countINR + " SumDosis: " + sumDosis + " CountDosis: " + countDosis)
+    rootElement.dosisds = (sumDosis / countDosis).toFixed(2);
+    rootElement.dosissum = sumDosis;
+  }
+}
+
+//Build Tabulator
+var table = new Tabulator("#example-table", {
+    height:"49%",
+    data:tabledata,
+    layout:"fitColumns",
+    resizableColumnFit:true,
+    columns:[
+      // editor:dateEditor
+      {title:"Datum", field:"date", resizable:false, headerSort:false},
+      {title:"INR gemessen", field:"inr", editor:"input", resizable:false, headerSort:false},
+      {title:"Gegebene Dosis", field:"dosis", editor:"input", resizable:false, headerSort:false},
+      {title:"t&auml;gl. Dosis (7-Tage-&#216;)", field:"dosisds", resizable:false, headerSort:false},
+      {title:"Wochen-Dosis", field:"dosissum", resizable:false, headerSort:false}
+    ]
+});
+
+table.on("cellEdited", async function(cell){
+  var data = cell.getData();
+  var tabledata = []
+  tabledata = await fetch('data.json')
+  .then((response) => response.json())
+
+  tabledata.find((td, i) =>{
+    if (td.date == data.date){
+      tabledata[i] = data;
+      return true; 
+    }
+  })
+
+  for (let index = 0; index < tabledata.length; index++) {
+    tabledata[index].inr = parseFloat(tabledata[index].inr);
+    tabledata[index].dosis = parseFloat(tabledata[index].dosis);
+  }
+
+  calculateAverages(tabledata);
+
+  var jsonText = JSON.stringify(tabledata);
+
+  await fetch('filehandler.php', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: jsonText
+  })
+  .then(response => {
+  if (response.ok) {
+    console.log('Data saved successfully');
+  } else {
+    console.error('Error saving data:', response.statusText);
+  }
+  })
+  .catch(error => {
+    console.error('Error saving data:', error);
+  });;
+
+  seriesDosis.data.setAll(getDosisData(tabledata));
+  seriesINR.data.setAll(getINRData(tabledata));
+  seriesDosisDS.data.setAll(getDosisDSData(tabledata));
+  chart.appear(1000, 100);
+});
+
+</script>
+
+<!-- HTML -->
+<title>Marie's Messdaten</title>
+<div id="chartdiv"></div>
+<div id="example-table"></div>
+
+<!--################ END LINE GRAPH ######################-->
